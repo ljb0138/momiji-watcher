@@ -14,7 +14,28 @@ concurrency:
   group: momiji
   cancel-in-progress: false   # 실행 중인 작업은 유지, 다음 작업 1개만 대기
 jobs:
+  expiry:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write   # 기한이 지나면 이 워크플로를 스스로 끄기 위해 필요
+    outputs:
+      expired: ${{ steps.check.outputs.expired }}
+    steps:
+      - name: 기한 확인 (2026-11-16 00:00 JST 이후면 자동 종료)
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(TZ=Asia/Tokyo date +%Y%m%d)" -ge 20261116 ]; then
+            echo "기한이 지나서 워크플로를 끕니다."
+            gh workflow disable watch.yml -R "${{ github.repository }}"
+            echo "expired=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "expired=false" >> "$GITHUB_OUTPUT"
+          fi
   check:
+    needs: expiry
+    if: needs.expiry.outputs.expired != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
@@ -33,7 +54,7 @@ jobs:
           path: state.json
           key: state-${{ github.run_id }}
           restore-keys: state-
-      - name: 1분마다 빈자리 확인 (약 5시간 40분)
+      - name: 1분마다 빈자리 확인 (약 5시간 40분, 11/16 0시 JST에 종료)
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}

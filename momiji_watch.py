@@ -8,11 +8,13 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 URL = "https://momiji-yamadaya.jp/yoyaku/?shop_id=1&start_date=2026-11-19&week=-1"
 BASE = "https://momiji-yamadaya.jp/yoyaku/"
 TARGET_DATES = ["11/14", "11/15"]
+JST = timezone(timedelta(hours=9))
+END_AT = datetime(2026, 11, 16, 0, 0, tzinfo=JST)  # 이 시각(일본 시간) 이후엔 감시 종료
 INTERVAL_SEC = 180  # 3분마다 확인
 CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "telegram_config.json")
 
@@ -100,6 +102,9 @@ def main():
         with open(state) as f:
             seen = {tuple(x) for x in json.load(f)}
     while True:
+        if datetime.now(JST) >= END_AT:
+            print(f"감시 기한({END_AT:%Y-%m-%d %H:%M} JST)이 지나 종료합니다.")
+            break
         now = datetime.now().strftime("%H:%M:%S")
         try:
             slots = parse(fetch(URL))
