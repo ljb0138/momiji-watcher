@@ -1,0 +1,47 @@
+name: momiji-watch
+on:
+  schedule:
+    - cron: "0 * * * *"   # 매시 정각 예약 → 앞 작업이 끝나는 즉시 이어서 실행
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "텔레그램 테스트 메시지 보내기"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: momiji
+  cancel-in-progress: false   # 실행 중인 작업은 유지, 다음 작업 1개만 대기
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 텔레그램 테스트
+        if: inputs.test
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python3 -c "import momiji_watch as m; m.notify('☁️ 클라우드 감시 작동 중', '11/14, 11/15 빈자리가 나면 여기로 알려드릴게요.')"
+      - name: 이전 상태 불러오기
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+      - name: 1분마다 빈자리 확인 (약 5시간 40분)
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          PYTHONUNBUFFERED: "1"
+        run: python3 momiji_watch.py --minutes 340 --interval 60 --state state.json
+      - name: 상태 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: state-${{ github.run_id }}
